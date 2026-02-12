@@ -1,34 +1,31 @@
-# Library Management System
-📚 Library Management System (C++)
-A robust, console-based Library Management System built with Modern C++. This project demonstrates database CRUD operations, file system management, and integration with external tools like Python and wkhtmltopdf.
+📚 Library Management System
 
-🚀 Key Features
-MySQL Integration: Persistent storage for books, student records, and issue logs.
+A complete Library Management System built using C++ (MSVC) with MySQL database integration, automatic PDF receipt generation, and Email notification support.
 
-Automated Receipts: Generates professional HTML receipts and converts them to PDF automatically.
+This project demonstrates database connectivity, file handling, receipt generation, and backend logic implementation using C++.
 
-Email Notifications: Integrated Python script to send return confirmations and receipts to students' Gmail.
+🚀 Features
 
-Fine Calculation: Built-in logic to track due dates and calculate late return fines.
+👤 Admin Login System
 
-Secure Input: Robust error handling for console inputs to prevent program crashes.
+📖 Add / Update / Delete Books
 
-🛠️ Tech Stack
-Language: C++17
+👨‍🎓 Issue & Return Books
 
-Database: MySQL (via Connector/C++)
+🗂 MySQL Database Integration
 
-PDF Engine: wkhtmltopdf
+🧾 Automatic Receipt Generation (HTML → PDF)
 
-Scripting: Python (for SMTP email services)
+📧 Email Receipt to User
 
-Tools: Visual Studio 2022
+🔐 Secure Input Handling
 
-📋 Prerequisites
-To run this project, you will need:
+📊 Record Management
 
-MySQL Server installed and running.
-
-wkhtmltopdf added to your System PATH.
-
-Python 3.x installed with smtplib capabilities.
+🛠️ Technologies Used
+Technology	Purpose
+C++ (MSVC)	Core Backend Logic
+MySQL	Database Storage
+HTML	Receipt Template
+wkhtmltopdf	Convert HTML to PDF
+Python	Send Email with Attachment
