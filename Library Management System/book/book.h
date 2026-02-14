@@ -24,7 +24,7 @@ using namespace std;
 namespace fs = std::filesystem;
 
 struct Book {
-	int bookId = 0;
+	int bookId = 0, numberOfCopies = 0, availableCopies;
 	string title, author;
 	bool isAvailable = false;
 };
@@ -52,16 +52,22 @@ public:
 		cout << "Enter Author Name : ";
 		getline(cin, b.author);
 
+		cout << "Enter the number of copies : ";
+		cin >> b.numberOfCopies;
+		b.availableCopies = b.numberOfCopies;
+
 		b.isAvailable = true;
 
 		try {
 			unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement(
-				"INSERT INTO books(title, author, is_available) VALUES (?, ?, ?)"
+				"INSERT INTO books(title, author, is_available, total_copies, available_copies) VALUES (?, ?, ?, ?, ?)"
 			));
 
 			pstmt->setString(1, b.title);
 			pstmt->setString(2, b.author);
 			pstmt->setBoolean(3, b.isAvailable);
+			pstmt->setInt(4, b.numberOfCopies);
+			pstmt->setInt(5, b.availableCopies);
 
 			pstmt->executeUpdate();
 			cout << "Book added successfully to SQL database!" << endl;
@@ -83,7 +89,9 @@ public:
 				cout << "ID    : " << res->getInt("book_id") << endl;
 				cout << "TITLE : " << res->getString("title") << endl;
 				cout << "Author: " << res->getString("author") << endl;
-				cout << "STATUS: " << (res->getBoolean("is_available") ? "[Available]" : "Issued") << endl;
+				if (res->getInt("available_copies") > 0) cout << "STATUS: [Available]\n";
+				else cout << "STATUS: [Not Available]\n";
+				cout << res->getInt("available_copies") << " Copies Available Out of " << res->getInt("total_copies");
 				cout << "\n-----------------------------------------------------" << endl;
 			}
 
@@ -176,25 +184,32 @@ public:
 				s.dueDate = calculateDueDate(s.days);
 
 				unique_ptr<sql::PreparedStatement> updateStmt(con->prepareStatement(
-					"UPDATE books SET is_available = 0 WHERE book_id = ?"
+					"UPDATE books SET available_copies = available_copies - 1 WHERE book_id = ? AND available_copies > 0"
 				));
 				updateStmt->setInt(1, bId);
 				updateStmt->executeQuery();
 
+				unique_ptr<sql::PreparedStatement> checkStmt(con->prepareStatement(
+					"UPDATE books SET is_available = 0 WHERE book_id = ? AND available_copies = 0"
+				));
+				checkStmt->setInt(1, bId);
+				checkStmt->executeUpdate();
+
 				unique_ptr<sql::PreparedStatement> recordStmt(con->prepareStatement(
-					"INSERT INTO issued_books(book_id, book_title, student_name, roll_number, issue_date, due_date, email, father_name, days_issued)"
-					"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+					"INSERT INTO issued_books(book_id, book_title, student_name, roll_number, section, issue_date, due_date, email, father_name, days_issued)"
+					"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?)"
 				));
 
 				recordStmt->setInt(1, bId);
 				recordStmt->setString(2, bTitle);
 				recordStmt->setString(3, s.studentName);
 				recordStmt->setInt(4, s.rollNumber);
-				recordStmt->setString(5, s.issueDate);
-				recordStmt->setString(6, s.dueDate);
-				recordStmt->setString(7, s.email);
-				recordStmt->setString(8, s.fatherName);
-				recordStmt->setInt(9, s.days);
+				recordStmt->setString(5, s.section);
+				recordStmt->setString(6, s.issueDate);
+				recordStmt->setString(7, s.dueDate);
+				recordStmt->setString(8, s.email);
+				recordStmt->setString(9, s.fatherName);
+				recordStmt->setInt(10, s.days);
 
 				recordStmt->executeUpdate();
 
@@ -241,18 +256,20 @@ public:
 
 	void returnBook(sql::Connection* con) {
 		this->con = con;
-		int bookId;
-		cout << "Enter Book ID to Return: ";
-		cin >> bookId;
+		int bookId, rollNum;
+		string section;
+		cout << "Enter Book ID to Return: "; cin >> bookId;
+		cout << "Enter Student Roll Number: "; cin >> rollNum;
+		cout << "Enter Section (e.g., A, B, C, D): "; cin >> section;
 
-		if (!isBookIssued(bookId)) {
-			cout << "This book is not currently issued.\n";
+		if (!isBookIssued(bookId,rollNum,section)) {
+			cout << "There is no book issued on this ID.\n";
 			return;
 		}
 		Student s;
 		Book b;
 
-		if (!getIssueDetailsByBookId(bookId, s, b)) {
+		if (!getIssueDetailsByBookId(bookId,rollNum,section, s, b)) {
 			cout << "Failed to retrieve issue details\n";
 			return;
 		}
@@ -274,28 +291,36 @@ public:
 
 		try {
 			unique_ptr<sql::PreparedStatement> logStmt(con->prepareStatement(
-				"INSERT INTO return_log(roll_number, student_name, book_id, book_title, issue_date, due_date,return_date,fine_amount) "
-				"VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+				"INSERT INTO return_log(roll_number, section, father_name, email, student_name, book_id, book_title, issue_date, due_date,return_date,fine_amount) "
+				"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)"
 			));
 			logStmt->setInt(1, s.rollNumber);
-			logStmt->setString(2, s.studentName);
-			logStmt->setInt(3, b.bookId);
-			logStmt->setString(4, b.title);
-			logStmt->setString(5, s.issueDate);
-			logStmt->setString(6, s.dueDate);
-			logStmt->setString(7, currentDate);
-			logStmt->setInt(8, fine);
+			logStmt->setString(2, s.section);
+			logStmt->setString(3, s.fatherName);
+			logStmt->setString(4, s.email);
+			logStmt->setString(5, s.studentName);
+			logStmt->setInt(6, b.bookId);
+			logStmt->setString(7, b.title);
+			logStmt->setString(8, s.issueDate);
+			logStmt->setString(9, s.dueDate);
+			logStmt->setString(10, currentDate);
+			logStmt->setInt(11, fine);
 			logStmt->executeUpdate();
 
 			unique_ptr<sql::PreparedStatement> delStmt(con->prepareStatement(
-				"DELETE FROM issued_books WHERE book_id = ?"
+				"DELETE FROM issued_books WHERE book_id = ? AND roll_number = ? AND section = ?"
 			));
 			delStmt->setInt(1, bookId);
+			delStmt->setInt(2, rollNum);
+			delStmt->setString(3, section);
 			delStmt->executeUpdate();
 
 
 			unique_ptr<sql::PreparedStatement> upStmt(con->prepareStatement(
-				"UPDATE books SET is_available = 1 WHERE book_id = ?"
+				"UPDATE books SET "
+				"available_copies = available_copies + 1, "
+				"is_available = 1 "
+				"WHERE book_id = ? AND available_copies < total_copies"
 			));
 
 			upStmt->setInt(1, bookId);
@@ -330,17 +355,25 @@ public:
 		try {
 			unique_ptr<sql::Statement> stmt(con->createStatement());
 			unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT * FROM issued_books"));
-
+			bool hasRecords = false;
 			while (res->next()) {
-				cout << "\n \t\t\t ISSUED BOOKS RECORD\n";
+				if (!hasRecords) {
+					cout << "\n\t\t\t -- ISSUED BOOKS RECORD ---\n";
+					hasRecords = true;
+				}
+				
 				cout << "\n---------------------------------------------" << endl;
 				cout << "BOOK ID	: " << res->getInt("book_id") << endl;
 				cout << "BOOK TITLE : " << res->getString("book_title") << endl;
 				cout << "STUDENT NAME : " << res->getString("student_name") << endl;
 				cout << "FATHER NAME : " << res->getString("father_name") << endl;
 				cout << "ROLL NUMBER : " << res->getInt("roll_number") << endl;
+				cout << "SECTION :" << res->getString("section") << endl;
 				cout << "EMAIL : " << res->getString("email") << endl;
 				cout << "\n---------------------------------------------" << endl;
+			}
+			if (!hasRecords) {
+				cout << "\n\t\t\t[!] No books are issued right now.\n";
 			}
 		}
 		catch (sql::SQLException& e) {
@@ -491,12 +524,14 @@ private:
 		}
 	}
 	sql::Connection* con;
-	bool isBookIssued(int bookId) {
+	bool isBookIssued(int bookId, int rollNumber, string section) {
 		try {
 			unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement(
-				"SELECT count(*) FROM issued_books WHERE book_id = ?"
+				"SELECT count(*) FROM issued_books WHERE book_id = ? AND roll_number = ? AND section = ?"
 			));
 			pstmt->setInt(1, bookId);
+			pstmt->setInt(2, rollNumber);
+			pstmt->setString(3, section);
 			unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 			if (res->next()) {
 				return res->getInt(1) > 0;
@@ -520,18 +555,21 @@ private:
 	}
 
 
-	bool getIssueDetailsByBookId(int bookId, Student& s, Book& b) {
+	bool getIssueDetailsByBookId(int bookId, int roll, string sec, Student& s, Book& b) {
 		try {
 			unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement(
-				"SELECT student_name, roll_number, email, father_name, book_title, issue_date, due_date "
-				"FROM issued_books WHERE book_id = ?"
+				"SELECT student_name, roll_number, section, email, father_name, book_title, issue_date, due_date "
+				"FROM issued_books WHERE book_id = ? AND roll_number = ? AND section = ?"
 			));
 			pstmt->setInt(1, bookId);
+			pstmt->setInt(2, roll);
+			pstmt->setString(3, sec);
 			unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 
 			if (res->next()) {
 				s.studentName = res->getString("student_name");
 				s.rollNumber = res->getInt("roll_number");
+				s.section = res->getString("section");
 				s.email = res->getString("email");
 				s.fatherName = res->getString("father_name");
 				b.title = res->getString("book_title");
