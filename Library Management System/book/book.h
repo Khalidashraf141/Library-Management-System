@@ -13,6 +13,8 @@
 #include <iomanip>
 #include <memory>
 
+
+
 // MySQL Headers
 #include <mysql_connection.h>
 #include <cppconn/driver.h>
@@ -24,7 +26,7 @@ using namespace std;
 namespace fs = std::filesystem;
 
 struct Book {
-	int bookId = 0, numberOfCopies = 0, availableCopies;
+	int bookId = 0, numberOfCopies = 0, availableCopies = 0;
 	string title, author;
 	bool isAvailable = false;
 };
@@ -234,16 +236,20 @@ public:
 
 				convertHTMLtoPDF(name);
 
-				string cmd = "python book/send_email.py \"" + s.email + "\" \"" + name + "\"";
-
-				int emailStatus = system(cmd.c_str());
-				if (emailStatus != 0) {
-					cout << "Email could not be send\n";
+				try {
+					unique_ptr<sql::PreparedStatement> emailStmt(
+						con->prepareStatement(
+							"INSERT INTO email_queue(student_email, receipt_name) VALUE(?, ?)"
+						)
+					);
+					emailStmt->setString(1, s.email);
+					emailStmt->setString(2, name);
+					emailStmt->executeUpdate();
+					cout << "Email added to queue.\n";
 				}
-				else {
-					cout << "Receipt email sent successfully\n";
+				catch (sql::SQLException& e) {
+					cout << "Error inserting into email_queue: " << e.what() << endl;
 				}
-
 			}
 			else {
 				cout << "Soory, this book is either not in the library or already issued.\n";
@@ -332,21 +338,27 @@ public:
 			return;
 		}
 
-		string cmd = "python book/return_email.py \"" + s.email + "\" \"" +
-			s.studentName + "\" \"" + b.title +
-			"\" \"" + to_string(bookId) +
-			"\" \"" + currentDate +
-			"\" \"" + to_string(fine) + "\"";
+		try {
+			unique_ptr<sql::PreparedStatement> emailStmt(
+				con->prepareStatement(
+					"INSERT INTO return_email_queue(student_email, student_name, book_title, book_id, return_date, fine_amount) "
+					"VALUES (?, ?, ?, ?, ?, ?)"
+				)
+			);
 
+			emailStmt->setString(1, s.email);
+			emailStmt->setString(2, s.studentName);
+			emailStmt->setString(3, b.title);
+			emailStmt->setInt(4, b.bookId);
+			emailStmt->setString(5, currentDate);
+			emailStmt->setInt(6, fine);
 
-		int emailStatus = system(cmd.c_str());
-		if (emailStatus != 0) {
-			cout << "Warning: Email could not be sent\n";
+			emailStmt->executeUpdate();
+			cout << "Return email added to queue.\n";
 		}
-		else {
-			cout << "Return confirmation email sent successfully.\n";
+		catch (sql::SQLException& e) {
+			cout << "Error inserting into return_email_queue: " << e.what() << endl;
 		}
-
 
 	}
 
@@ -436,8 +448,8 @@ private:
 		html << "<table style='width:100%; font-size:14px; color:#333;'>\n";
 		html << "<tr><td style='padding:5px 0;'><b>Name:</b></td><td>" << s.studentName << "</td></tr>\n";
 		html << "<tr><td style='padding:5px 0;'><b>Roll No:</b></td><td>" << s.rollNumber << "</td></tr>\n";
-		html << "<tr><td style='padding:5px 0;'><b>Roll No:</b></td><td>" << s.section << "</td></tr>\n";
-		html << "<tr><td style='padding:5px 0;'><b>Email:</b></td><td>" << s.fatherName << "</td></tr>\n";
+		html << "<tr><td style='padding:5px 0;'><b>Section:</b></td><td>" << s.section << "</td></tr>\n";
+		html << "<tr><td style='padding:5px 0;'><b>Father Name:</b></td><td>" << s.fatherName << "</td></tr>\n";
 		html << "<tr><td style='padding:5px 0;'><b>Email:</b></td><td>" << s.email << "</td></tr>\n";
 		html << "</table>\n";
 

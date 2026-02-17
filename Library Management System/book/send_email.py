@@ -48,6 +48,8 @@ try:
         server.send_message(msg)
 
     print("Email sent successfully")
+    sys.exit(0)
 
 except Exception as e:
     print("Failed to send email:", e)
+    sys.exit(1)

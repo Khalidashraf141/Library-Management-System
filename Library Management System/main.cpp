@@ -1,5 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include <iostream>
+#include <thread>
+#include <chrono>
 #include <limits>
 #include <memory>
 #include <mysql_connection.h>
@@ -8,6 +10,7 @@
 
 #include "book/book.h"
 #include "admin/login.h"
+
 
 using namespace std;
 
@@ -39,12 +42,112 @@ namespace {
 	}
 }
 
+void emailWorker() {
+	while (true) {
+		try {
+			auto con = connectDB();
+			if (!con) {
+				this_thread::sleep_for(chrono::seconds(10));
+				continue;
+			}
+
+			unique_ptr<sql::PreparedStatement>pstmt(
+				con->prepareStatement(
+					"SELECT id, student_email, receipt_name FROM email_queue WHERE status = 'PENDING'"
+				)
+			);
+			unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+
+			while (res->next()) {
+				int id = res->getInt("id");
+				string email = res->getString("student_email");
+				string receipt = res->getString("receipt_name");
+
+				string cmd = "python book/send_email.py \"" + email + "\" \"" + receipt + "\"";
+
+				if (system(cmd.c_str()) == 0) {
+					unique_ptr<sql::PreparedStatement> updateStmt(
+						con->prepareStatement(
+							"UPDATE email_queue SET status = 'SENT' WHERE id = ?"
+						)
+					);
+					updateStmt->setInt(1, id);
+					updateStmt->executeUpdate();
+					cout << "[Auto Email Sent] " << email << endl;
+				}
+			}
+		}
+		catch (...) {
+			cout << "Error";
+		}
+		this_thread::sleep_for(chrono::seconds(10));
+	}
+}
+
+void returnEmailWorker() {
+	while (true) {
+		try {
+			auto con = connectDB();
+			if (!con) {
+				this_thread::sleep_for(chrono::seconds(10));
+				continue;
+			}
+			unique_ptr<sql::PreparedStatement>pstmt(
+				con->prepareStatement(
+					"SELECT id, student_email, student_name, book_title, book_id, return_date, fine_amount "
+					"FROM return_email_queue WHERE status = 'PENDING'"
+				)
+			);
+			unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+
+			while (res->next()) {
+				int id = res->getInt("id");
+				string email = res->getString("student_email");
+				string student = res->getString("student_name");
+				string title = res->getString("book_title");
+				string bookId = to_string(res->getInt("book_id"));
+				string date = res->getString("return_date");
+				string fine = to_string(res->getInt("fine_amount"));
+
+
+				string cmd = "python book/return_email.py \"" + email + "\" \"" +
+					student + "\" \"" + title + "\" \"" +
+					bookId + "\" \"" + date + "\" \"" + fine + "\"";
+
+				if (system(cmd.c_str()) == 0) {
+					unique_ptr<sql::PreparedStatement> updateStmt(
+						con->prepareStatement(
+							"UPDATE return_email_queue SET status = 'SENT' WHERE id = ?"
+						)
+					);
+					updateStmt->setInt(1, id);
+					updateStmt->executeUpdate();
+
+					cout << "[Auto Return Email Sent] " << email << endl;
+				}
+
+			}
+		}
+		catch (...) {
+			cout << "Return email worker error\n";
+		}
+
+	this_thread::sleep_for(chrono::seconds(10));
+	}
+}
+
 
 int main() {
 	bool libraryRunning = true;
 
 	auto con = connectDB();
 	if (!con) return 1;
+
+	
+	thread worker(emailWorker);
+	worker.detach();
+	thread returnWorker(returnEmailWorker);
+	returnWorker.detach();
 
 
 	while (libraryRunning)
