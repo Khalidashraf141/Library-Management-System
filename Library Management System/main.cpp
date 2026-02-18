@@ -65,7 +65,9 @@ void emailWorker() {
 
 				string cmd = "python book/send_email.py \"" + email + "\" \"" + receipt + "\"";
 
-				if (system(cmd.c_str()) == 0) {
+				int result = system(cmd.c_str());
+
+				if (result == 0) {
 					unique_ptr<sql::PreparedStatement> updateStmt(
 						con->prepareStatement(
 							"UPDATE email_queue SET status = 'SENT' WHERE id = ?"
@@ -114,7 +116,9 @@ void returnEmailWorker() {
 					student + "\" \"" + title + "\" \"" +
 					bookId + "\" \"" + date + "\" \"" + fine + "\"";
 
-				if (system(cmd.c_str()) == 0) {
+				int result = system(cmd.c_str());
+
+				if (result == 0) {
 					unique_ptr<sql::PreparedStatement> updateStmt(
 						con->prepareStatement(
 							"UPDATE return_email_queue SET status = 'SENT' WHERE id = ?"

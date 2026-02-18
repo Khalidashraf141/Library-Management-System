@@ -51,5 +51,4 @@ try:
     sys.exit(0)
 
 except Exception as e:
-    print("Failed to send email:", e)
     sys.exit(1)

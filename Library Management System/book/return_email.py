@@ -66,5 +66,4 @@ try:
         print("Email sent successfully")
         sys.exit(0)
 except Exception as e:
-    print("Email failed:", e)
     sys.exit(1)

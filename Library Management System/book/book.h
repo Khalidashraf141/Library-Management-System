@@ -33,7 +33,7 @@ struct Book {
 
 struct Student {
 	string studentName, fatherName, section, email, issueDate, dueDate;
-	int rollNumber = 0, days = 0;
+	int rollNumber = 0, days = 0, admissionNumber = 0;
 };
 
 class LibraryBook {
@@ -158,11 +158,22 @@ public:
 				cout << "\t\t\tBook is available! Procedding with issue...\n";
 
 				Student s;
+				cout << "Enter Admission Number: ";
+				cin >> s.admissionNumber;
+
+				int currentCount = getIssuedBookCount(con, s.admissionNumber);
+				if (currentCount >= 2) {
+					cout << "\n[!] Admission No " << s.admissionNumber << " already has 2 books issued.\n";
+					return;
+				}
+
+				cin.ignore(numeric_limits<streamsize>::max(), '\n');
 				cout << "Enter Student Name : ";
 				getline(cin, s.studentName);
 
 				cout << "Enter Roll Number : ";
 				cin >> s.rollNumber;
+
 
 				cout << "Enter Student Class Section : ";
 				cin >> s.section;
@@ -198,8 +209,8 @@ public:
 				checkStmt->executeUpdate();
 
 				unique_ptr<sql::PreparedStatement> recordStmt(con->prepareStatement(
-					"INSERT INTO issued_books(book_id, book_title, student_name, roll_number, section, issue_date, due_date, email, father_name, days_issued)"
-					"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,?)"
+					"INSERT INTO issued_books(book_id, book_title, student_name, roll_number, section, admission_no, issue_date, due_date, email, father_name, days_issued)"
+					"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 				));
 
 				recordStmt->setInt(1, bId);
@@ -207,11 +218,12 @@ public:
 				recordStmt->setString(3, s.studentName);
 				recordStmt->setInt(4, s.rollNumber);
 				recordStmt->setString(5, s.section);
-				recordStmt->setString(6, s.issueDate);
-				recordStmt->setString(7, s.dueDate);
-				recordStmt->setString(8, s.email);
-				recordStmt->setString(9, s.fatherName);
-				recordStmt->setInt(10, s.days);
+				recordStmt->setInt(6, s.admissionNumber);
+				recordStmt->setString(7, s.issueDate);
+				recordStmt->setString(8, s.dueDate);
+				recordStmt->setString(9, s.email);
+				recordStmt->setString(10, s.fatherName);
+				recordStmt->setInt(11, s.days);
 
 				recordStmt->executeUpdate();
 
@@ -476,7 +488,7 @@ private:
 		html << "</div></body></html>\n";
 		html.close();
 
-		cout << "Professional Receipt generated: book/" << fileName << endl;
+		cout << "Receipt generated: book/" << fileName << endl;
 	}
 
 	void fetchBookDetails(sql::Connection* con, Book& b) {
@@ -597,6 +609,25 @@ private:
 			cout << "Error in fetching data from issued_books" << e.what() << endl;
 		}
 		return false;
+	}
+
+	int getIssuedBookCount(sql::Connection* con, int admissionNo) {
+		try {
+			unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement(
+				"SELECT COUNT(*) FROM issued_books WHERE admission_no = ?"
+			));
+
+			pstmt->setInt(1, admissionNo);
+			unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+
+			if (res->next()) {
+				return res->getInt(1);
+			}
+		}
+		catch (sql::SQLException& e) {
+			cout << "\n[ERROR] Failed to check book limit for Admission No " << admissionNo << ": " << e.what() << endl;
+		}
+		return 0;
 	}
 };
 #endif

@@ -130,6 +130,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="librarycard\libraryCard.h" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>

@@ -4,11 +4,15 @@
 #include <limits>
 #include <conio.h>
 #include <string>
-#include <memory> // For unique_ptr
+#include <memory>
+#include <random>
+
 #include <mysql_connection.h>
 #include <cppconn/driver.h>
 #include <cppconn/exception.h>
 #include <cppconn/prepared_statement.h>
+
+
 using namespace std;
 
 class Login
@@ -27,7 +31,7 @@ public:
 
 		try {
 			unique_ptr<sql::PreparedStatement>pstmt(con->prepareStatement(
-				"SELECT * FROM system_admins WHERE username = ? AND password = ?"));
+				"SELECT * FROM system_admins WHERE username = ? AND password_has = ?"));
 
 
 			//Bind the user input to the '?' placeholders

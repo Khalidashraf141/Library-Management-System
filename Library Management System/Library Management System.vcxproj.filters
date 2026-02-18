@@ -26,6 +26,9 @@
     <ClInclude Include="book\book.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="librarycard\libraryCard.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="book\send_email.py" />
